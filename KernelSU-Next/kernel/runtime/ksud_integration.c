@@ -568,7 +568,8 @@ static int sys_execve_handler_pre(struct kprobe *p, struct pt_regs *regs)
 	filename_in.name = path;
 
 	filename_p = &filename_in;
-	return ksu_handle_execveat_ksud(AT_FDCWD, &filename_p, &argv, NULL, NULL);
+	int fd = AT_FDCWD;
+	return ksu_handle_execveat_ksud(&fd, &filename_p, &argv, NULL, NULL);
 }
 
 static int sys_read_handler_pre(struct kprobe *p, struct pt_regs *regs)
@@ -720,7 +721,9 @@ static int ksu_execve_ksud_common(const char __user *filename_user,
 	filename_in.name = path;
 	filename_p = &filename_in;
 
-	return ksu_handle_execveat_ksud(AT_FDCWD, &filename_p, argv, NULL,
+	int fd = AT_FDCWD;
+
+	return ksu_handle_execveat_ksud(&fd, &filename_p, argv, NULL,
 					NULL);
 }
 
