@@ -156,7 +156,7 @@ CAN_UMOUNT = static int can_umount(const struct path *path, int flags)\n\
                 return -EINVAL;\n\t\
         if (!check_mnt(mnt))\n\t\t\
                 return -EINVAL;\n\t\
-        if (mnt->mnt.mnt_flags & MNT_LOCKED)\n\t\t\
+        if (path->mnt->mnt_flags & MNT_LOCKED)\n\t\t\
                 return -EINVAL;\n\t\
         if (flags & MNT_FORCE && !capable(CAP_SYS_ADMIN))\n\t\t\
                 return -EPERM;\n\t\
