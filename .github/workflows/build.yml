@@ -71,7 +71,7 @@ jobs:
 
           chmod +x build_kernel.sh
 
-          sed -i "s|export CROSS_COMPILE=.*|export CROSS_COMPILE=$KERNEL_ROOT/toolchain/gcc-cfp/gcc-ibv-jopp/aarch64-linux-android-4.9/bin/aarch64-linux-android-|" build_kernel.sh
+#          sed -i "s|export CROSS_COMPILE=.*|export CROSS_COMPILE=$KERNEL_ROOT/toolchain/gcc-cfp/gcc-ibv-jopp/aarch64-linux-android-4.9/bin/aarch64-linux-android-|" build_kernel.sh
 
           sed -i 's|make -j64|make -j$(nproc --all)|' build_kernel.sh
 
