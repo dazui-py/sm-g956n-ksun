@@ -151,20 +151,20 @@ int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,
 		static char original_version_buf[65] = {0};
 
 		// basically void * void __user * void __user *arg
-		void ***ppptr = (uintptr_t)arg;
+		void ***ppptr = (void ***)(uintptr_t)arg;
 
 		// user pointer storage
 		// init this as zero so this works on 32-on-64 compat (LE)
 		uint64_t u_pptr = 0;
 		uint64_t u_ptr = 0;
 
-		pr_info("sys_reboot: ppptr: 0x%lx \n", ppptr);
+		pr_info("sys_reboot: ppptr: %p\n", ppptr);
 
 		// arg here is ***, dereference to pull out **
 		if (copy_from_user(&u_pptr, (void __user *)*ppptr, sizeof(u_pptr)))
 			return 0;
 
-		pr_info("sys_reboot: u_pptr: 0x%lx \n", u_pptr);
+		pr_info("sys_reboot: u_pptr: 0x%llx\n", (unsigned long long)u_pptr);
 
 		// now we got the __user **
 		// we cannot dereference this as this is __user
@@ -172,7 +172,7 @@ int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,
 		if (copy_from_user(&u_ptr, (void __user *)u_pptr, sizeof(u_ptr)))
 			return 0;
 
-		pr_info("sys_reboot: u_ptr: 0x%lx \n", u_ptr);
+		pr_info("sys_reboot: u_ptr: 0x%llx\n", (unsigned long long)u_ptr);
 
 		// for release
 		if (strncpy_from_user(release_buf, (char __user *)u_ptr, sizeof(release_buf)) < 0)
