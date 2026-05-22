@@ -25,12 +25,6 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout kernel
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.BRANCH }}
-          fetch-depth: 1
-
       - name: Install dependencies
         run: |
           sudo apt update
@@ -55,13 +49,30 @@ jobs:
             wget \
             zip
 
+      - name: Clone kernel repo
+        run: |
+          git clone \
+            --depth=1 \
+            --branch "${{ github.event.inputs.BRANCH }}" \
+            https://github.com/dazui-py/sm-g956n-ksun.git
+
+          cd sm-g956n-ksun
+
+          echo "KERNEL_ROOT=$(pwd)" >> "$GITHUB_ENV"
+
+          echo "Cloned kernel repo at: $(pwd)"
+          git remote -v
+          git branch --show-current
+          git rev-parse --short HEAD
+
       - name: Prepare build script
         run: |
+          cd "$KERNEL_ROOT"
+
           chmod +x build_kernel.sh
 
-          # sed -i 's|export CROSS_COMPILE=.*|export CROSS_COMPILE='"$PWD"'/toolchain/gcc-cfp/gcc-ibv-jopp/aarch64-linux-android-4.9/bin/aarch64-linux-android-|' build_kernel.sh
+          sed -i "s|export CROSS_COMPILE=.*|export CROSS_COMPILE=$KERNEL_ROOT/toolchain/gcc-cfp/gcc-ibv-jopp/aarch64-linux-android-4.9/bin/aarch64-linux-android-|" build_kernel.sh
 
-          # GitHub runner não precisa de -j64. Isso pode rebentar RAM à toa.
           sed -i 's|make -j64|make -j$(nproc --all)|' build_kernel.sh
 
           echo "==== build_kernel.sh ===="
@@ -70,6 +81,8 @@ jobs:
       - name: Apply KernelSU hooks
         if: github.event.inputs.KSU == 'true'
         run: |
+          cd "$KERNEL_ROOT"
+
           if [ -f apply_ksu_hooks.py ]; then
             python3 apply_ksu_hooks.py
           else
@@ -79,6 +92,7 @@ jobs:
 
       - name: Build kernel
         run: |
+          cd "$KERNEL_ROOT"
           set -e
 
           if [ "${{ github.event.inputs.SILENT_BUILD }}" = "true" ]; then
@@ -90,8 +104,9 @@ jobs:
       - name: Create build details
         if: always()
         run: |
-          BUILD_NAME="SM-G965N-star2ltekor-$(git rev-parse --short HEAD)-$(date +'%Y%m%d%H%M%S')"
+          cd "$KERNEL_ROOT"
 
+          BUILD_NAME="SM-G965N-star2ltekor-$(git rev-parse --short HEAD)-$(date +'%Y%m%d%H%M%S')"
           echo "BUILD_NAME=$BUILD_NAME" >> "$GITHUB_ENV"
 
           {
@@ -100,9 +115,11 @@ jobs:
             echo "Defconfig: exynos9810-star2ltekor_defconfig"
             echo "Android major version: q"
             echo "KernelSU hooks: ${{ github.event.inputs.KSU }}"
+            echo "Repo: https://github.com/dazui-py/sm-g956n-ksun.git"
             echo "Branch: ${{ github.event.inputs.BRANCH }}"
             echo "Commit: $(git rev-parse --short HEAD)"
             echo "Date: $(date)"
+            echo "Kernel root: $KERNEL_ROOT"
           } > buildDetails.txt
 
           if [ -f .config ]; then
@@ -115,10 +132,10 @@ jobs:
         with:
           name: Config-${{ env.BUILD_NAME }}
           path: |
-            .config
-            build_config.txt
-            buildDetails.txt
-            build.log
+            sm-g956n-ksun/.config
+            sm-g956n-ksun/build_config.txt
+            sm-g956n-ksun/buildDetails.txt
+            sm-g956n-ksun/build.log
           if-no-files-found: warn
 
       - name: Upload kernel artifacts
@@ -126,22 +143,24 @@ jobs:
         with:
           name: Kernel-${{ env.BUILD_NAME }}
           path: |
-            arch/arm64/boot/Image
-            arch/arm64/boot/Image.gz
-            arch/arm64/boot/Image.gz-dtb
-            arch/arm64/boot/dts/exynos/*.dtb
-            arch/arm64/boot/dts/exynos/*.dtbo
+            sm-g956n-ksun/arch/arm64/boot/Image
+            sm-g956n-ksun/arch/arm64/boot/Image.gz
+            sm-g956n-ksun/arch/arm64/boot/Image.gz-dtb
+            sm-g956n-ksun/arch/arm64/boot/dts/exynos/*.dtb
+            sm-g956n-ksun/arch/arm64/boot/dts/exynos/*.dtbo
           if-no-files-found: warn
           compression-level: 9
 
       - name: Strip modules
         continue-on-error: true
         run: |
+          cd "$KERNEL_ROOT"
+
           mkdir -p kernel_modules
 
           find . -type f -name "*.ko" -exec cp {} kernel_modules/ \;
 
-          STRIP="$PWD/toolchain/gcc-cfp/gcc-ibv-jopp/aarch64-linux-android-4.9/bin/aarch64-linux-android-strip"
+          STRIP="$KERNEL_ROOT/toolchain/gcc-cfp/gcc-ibv-jopp/aarch64-linux-android-4.9/bin/aarch64-linux-android-strip"
 
           if find kernel_modules -name "*.ko" | grep -q .; then
             for ko in kernel_modules/*.ko; do
@@ -156,6 +175,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Modules-${{ env.BUILD_NAME }}
-          path: kernel_modules/*
+          path: sm-g956n-ksun/kernel_modules/*
           if-no-files-found: warn
           compression-level: 9
