@@ -132,8 +132,7 @@ try_setns:
     void *ns = ns_get_path(&ns_path, pid1_task, &mntns_operations);
     put_task_struct(pid1_task);
     if (IS_ERR(ns)) {
-        pr_warn("failed get path for init mount namespace: %ld
-", PTR_ERR(ns));
+        pr_warn("failed get path for init mount namespace: %ld\n", PTR_ERR(ns));
         goto out;
     }
     struct file *ns_file = dentry_open(&ns_path, O_RDONLY, ksu_cred);
