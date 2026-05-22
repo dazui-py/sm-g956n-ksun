@@ -1,0 +1,161 @@
+name: Build Kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      BRANCH:
+        description: Kernel branch
+        required: true
+        default: main
+
+      KSU:
+        description: Apply KernelSU hooks
+        required: false
+        default: false
+        type: boolean
+
+      SILENT_BUILD:
+        description: Silent build logs
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout kernel
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.BRANCH }}
+          fetch-depth: 1
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            bc \
+            bison \
+            build-essential \
+            cpio \
+            flex \
+            git \
+            kmod \
+            libelf-dev \
+            libssl-dev \
+            lz4 \
+            make \
+            openssl \
+            perl \
+            python-is-python3 \
+            python3 \
+            tar \
+            unzip \
+            wget \
+            zip
+
+      - name: Prepare build script
+        run: |
+          chmod +x build_kernel.sh
+
+          # sed -i 's|export CROSS_COMPILE=.*|export CROSS_COMPILE='"$PWD"'/toolchain/gcc-cfp/gcc-ibv-jopp/aarch64-linux-android-4.9/bin/aarch64-linux-android-|' build_kernel.sh
+
+          # GitHub runner não precisa de -j64. Isso pode rebentar RAM à toa.
+          sed -i 's|make -j64|make -j$(nproc --all)|' build_kernel.sh
+
+          echo "==== build_kernel.sh ===="
+          cat build_kernel.sh
+
+      - name: Apply KernelSU hooks
+        if: github.event.inputs.KSU == 'true'
+        run: |
+          if [ -f apply_ksu_hooks.py ]; then
+            python3 apply_ksu_hooks.py
+          else
+            echo "apply_ksu_hooks.py not found"
+            exit 1
+          fi
+
+      - name: Build kernel
+        run: |
+          set -e
+
+          if [ "${{ github.event.inputs.SILENT_BUILD }}" = "true" ]; then
+            ./build_kernel.sh > build.log 2>&1
+          else
+            ./build_kernel.sh 2>&1 | tee build.log
+          fi
+
+      - name: Create build details
+        if: always()
+        run: |
+          BUILD_NAME="SM-G965N-star2ltekor-$(git rev-parse --short HEAD)-$(date +'%Y%m%d%H%M%S')"
+
+          echo "BUILD_NAME=$BUILD_NAME" >> "$GITHUB_ENV"
+
+          {
+            echo "Device: SM-G965N"
+            echo "Codename: star2ltekor"
+            echo "Defconfig: exynos9810-star2ltekor_defconfig"
+            echo "Android major version: q"
+            echo "KernelSU hooks: ${{ github.event.inputs.KSU }}"
+            echo "Branch: ${{ github.event.inputs.BRANCH }}"
+            echo "Commit: $(git rev-parse --short HEAD)"
+            echo "Date: $(date)"
+          } > buildDetails.txt
+
+          if [ -f .config ]; then
+            cp .config build_config.txt
+          fi
+
+      - name: Upload config and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Config-${{ env.BUILD_NAME }}
+          path: |
+            .config
+            build_config.txt
+            buildDetails.txt
+            build.log
+          if-no-files-found: warn
+
+      - name: Upload kernel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernel-${{ env.BUILD_NAME }}
+          path: |
+            arch/arm64/boot/Image
+            arch/arm64/boot/Image.gz
+            arch/arm64/boot/Image.gz-dtb
+            arch/arm64/boot/dts/exynos/*.dtb
+            arch/arm64/boot/dts/exynos/*.dtbo
+          if-no-files-found: warn
+          compression-level: 9
+
+      - name: Strip modules
+        continue-on-error: true
+        run: |
+          mkdir -p kernel_modules
+
+          find . -type f -name "*.ko" -exec cp {} kernel_modules/ \;
+
+          STRIP="$PWD/toolchain/gcc-cfp/gcc-ibv-jopp/aarch64-linux-android-4.9/bin/aarch64-linux-android-strip"
+
+          if find kernel_modules -name "*.ko" | grep -q .; then
+            for ko in kernel_modules/*.ko; do
+              echo "Stripping $(basename "$ko")"
+              "$STRIP" --strip-unneeded "$ko" || true
+            done
+          else
+            echo "No modules found"
+          fi
+
+      - name: Upload modules
+        uses: actions/upload-artifact@v4
+        with:
+          name: Modules-${{ env.BUILD_NAME }}
+          path: kernel_modules/*
+          if-no-files-found: warn
+          compression-level: 9
