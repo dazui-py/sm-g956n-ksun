@@ -75,6 +75,13 @@ jobs:
           echo "==== build_kernel.sh ===="
           cat build_kernel.sh
 
+      - name: Fix DTC yylloc build error
+        run: |
+         cd "$KERNEL_ROOT"
+
+         sed -i '/YYLTYPE yylloc;/d' scripts/dtc/dtc-lexer.lex.c_shipped || true
+         sed -i '/YYLTYPE yylloc;/d' scripts/dtc/dtc-lexer.lex.c || true
+
       - name: Apply KernelSU hooks
         if: ${{ inputs.KSU }}
         run: |
