@@ -170,7 +170,7 @@ enum {
 	RKP_CMD_CMMIT_CREDS,
 	RKP_CMD_OVRD_CREDS,
 };
-#define override_creds(x) rkp_override_creds(&x)
+#define override_creds(x) rkp_override_creds((struct cred **)&(x))
 #endif /*CONFIG_RKP_KDP*/
 
 extern void __put_cred(struct cred *);

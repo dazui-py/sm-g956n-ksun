@@ -105,4 +105,7 @@ extern dev_t name_to_dev_t(const char *name);
 
 extern unsigned int sysctl_mount_max;
 
+extern void rkp_set_mnt_flags(struct vfsmount *mnt, int flags);
+extern void rkp_reset_mnt_flags(struct vfsmount *mnt, int flags);
+
 #endif /* _LINUX_MOUNT_H */
